@@ -1,0 +1,68 @@
+from PIL import Image
+import tensorflow as tf
+import cv2
+import os
+import matplotlib.pyplot as plt
+
+DATASET_PATH = 'dataset/'
+
+
+class_names = sorted(os.listdir(DATASET_PATH))
+num_classes = len(class_names)
+class_mode = "binary" if num_classes == 2 else "categorical"
+
+print(f"Классы: {class_names}, Режим: {class_mode}\n")
+
+
+model = tf.keras.models.load_model("image_classifier.h5")
+
+
+def predict_image(image_path):
+    if not os.path.exists(image_path):
+        print(f"Ошибка: Файл не найден по пути: {image_path}")
+        return
+
+    try:
+        img_pil = Image.open(image_path)
+        img_pil.verify()
+    except (OSError, IOError):
+        print(f"Ошибка: Поврежденное изображение - {image_path}")
+        return
+
+
+    img_cv = cv2.imread(image_path)
+    if img_cv is None:
+        print(f"Ошибка: Не удалось прочитать изображение - {image_path}")
+        return
+
+
+    img_resized = cv2.resize(img_cv, (128, 128))
+    img_normalized = img_resized / 255.0
+    img_expanded = tf.expand_dims(img_normalized, axis=0)
+
+
+    prediction = model.predict(img_expanded, verbose=0)
+
+    if class_mode == "binary":
+        class_index = int(prediction[0][0] > 0.5)
+        predicted_class = class_names[class_index]
+        confidence = prediction[0][0] if class_index == 1 else 1 - prediction[0][0]
+        title_text = f"Модель определила: {predicted_class} ({confidence:.2f})"
+    else:
+        class_index = tf.argmax(prediction, axis=-1).numpy()[0]
+        predicted_class = class_names[class_index]
+        title_text = f"Модель определила: {predicted_class}"
+
+    print(f"{image_path} ➔ {title_text}")
+
+
+    img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+
+    plt.figure(figsize=(5, 5))
+    plt.imshow(img_rgb)
+    plt.title(title_text)
+    plt.axis('off')
+    plt.show()
+
+
+predict_image("dataset/cats/cat11.png")
